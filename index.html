@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="經濟儀表板">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Jane 經濟局勢儀表板</title>
+<style>
+:root{
+  --bg:#0b0f1a; --card:#131a2b; --card2:#1a2338; --line:#232e4a;
+  --tx:#e8ecf6; --tx2:#8b96b3; --tx3:#5b6683;
+  --good:#34d399; --info:#60a5fa; --warn:#fbbf24; --bad:#f87171;
+  --green:#10b981; --blue:#3b82f6; --orange:#f59e0b; --red:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;
+  font-size:15px;line-height:1.5;padding:env(safe-area-inset-top) 0 40px}
+.wrap{max-width:560px;margin:0 auto;padding:14px 14px 0}
+header{display:flex;justify-content:space-between;align-items:baseline;padding:6px 2px 12px}
+header h1{font-size:17px;font-weight:700;letter-spacing:.5px}
+header .upd{font-size:11px;color:var(--tx3)}
+.stale-banner{background:#3a2b12;color:#fbbf24;border:1px solid #6b4e1a;border-radius:10px;
+  padding:8px 12px;font-size:12px;margin-bottom:12px;display:none}
+
+/* 總評 */
+.hero{border-radius:18px;padding:18px 16px 16px;margin-bottom:14px;position:relative;overflow:hidden;
+  background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--line)}
+.hero::before{content:"";position:absolute;inset:0;opacity:.16;background:
+  radial-gradient(circle at 85% 15%,var(--hero-c,#3b82f6),transparent 60%)}
+.hero .lv{display:flex;align-items:center;gap:12px;position:relative}
+.hero .badge{font-size:22px;font-weight:800;letter-spacing:1px;color:var(--hero-c,#3b82f6)}
+.hero .score{margin-left:auto;text-align:right}
+.hero .score b{font-size:30px;font-weight:800;color:var(--hero-c)}
+.hero .score span{font-size:11px;color:var(--tx3);display:block;margin-top:-4px}
+.gaugebar{height:8px;border-radius:4px;margin:12px 0 10px;position:relative;background:
+  linear-gradient(90deg,#ef4444 0 25%,#f59e0b 25% 45%,#3b82f6 45% 68%,#10b981 68% 100%);opacity:.9}
+.gaugebar i{position:absolute;top:-4px;width:4px;height:16px;background:#fff;border-radius:2px;
+  box-shadow:0 0 6px rgba(255,255,255,.8);transform:translateX(-2px)}
+.hero p{font-size:13px;color:var(--tx2);position:relative}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;position:relative}
+.chip{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid}
+.chip.cr{color:var(--bad);border-color:#5b2530;background:#2a1520}
+.chip.op{color:var(--good);border-color:#1d4a3a;background:#0f2a20}
+.chip.liq{color:var(--info);border-color:#274169;background:#131f38}
+
+/* 區塊 */
+h2.sec{font-size:14px;font-weight:700;margin:20px 2px 3px;display:flex;align-items:center;gap:8px}
+h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--info)}
+.secnote{font-size:11px;color:var(--tx3);margin:0 2px 9px 14px}
+
+/* 資金流向 */
+.flows{display:flex;flex-direction:column;gap:8px}
+.flow{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+  display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--tx2)}
+.flow .ic{font-size:16px;line-height:1.3;flex-shrink:0}
+
+/* 指標卡 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;user-select:none}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot.good{background:var(--good);box-shadow:0 0 8px rgba(52,211,153,.5)}
+.dot.info{background:var(--info)}
+.dot.warn{background:var(--warn);box-shadow:0 0 8px rgba(251,191,36,.4)}
+.dot.bad{background:var(--bad);box-shadow:0 0 8px rgba(248,113,113,.55)}
+.row .nm{flex:1;min-width:0}
+.row .nm b{font-size:13.5px;font-weight:600;display:block}
+.row .nm span{font-size:11px;color:var(--tx2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .val{text-align:right;flex-shrink:0}
+.row .val b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.row .val span{font-size:10.5px;color:var(--tx3);display:block}
+.row svg{flex-shrink:0;opacity:.9}
+.oppflag{font-size:10px;color:#0b0f1a;background:var(--good);border-radius:4px;padding:1px 5px;
+  font-weight:700;margin-left:5px;vertical-align:2px}
+.stale-tag{font-size:10px;color:var(--warn);margin-left:5px}
+.detail{display:none;padding:2px 14px 13px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--tx2)}
+.card.open .detail{display:block}
+.detail .q{padding:9px 0 5px}
+.detail .meta{font-size:11px;color:var(--tx3);margin-top:6px}
+.detail .extra{color:var(--tx2);font-size:12px;margin-top:4px}
+
+/* 資產矩陣 */
+.matrix{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px}
+.tile .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.tile .hd b{font-size:13.5px}
+.tile .st{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:6px}
+.st.順風{color:var(--good);background:#0f2a20}
+.st.逆風{color:var(--bad);background:#2a1520}
+.st.中性{color:var(--info);background:#131f38}
+.st.彈藥時刻{color:#0b0f1a;background:var(--good)}
+.st.常備{color:var(--tx2);background:var(--card2)}
+.tile p{font-size:11px;color:var(--tx3);line-height:1.45}
+
+footer{margin-top:26px;padding:0 4px;font-size:10.5px;color:var(--tx3);line-height:1.7}
+.loading{text-align:center;padding:60px 20px;color:var(--tx2)}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="loading">載入資料中…</div></div>
+<script>
+const SIG_LABEL={good:"",info:"",warn:"",bad:""};
+const FLOW_IC={usd:"💵",risk:"🚀",safe:"🛡️",flat:"⚖️"};
+const HERO_C={green:"var(--green)",blue:"var(--blue)",orange:"var(--orange)",red:"var(--red)"};
+
+function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+function sparkline(vals,sig){
+  if(!vals||vals.length<2) return "";
+  const w=64,h=26,mn=Math.min(...vals),mx=Math.max(...vals),rg=(mx-mn)||1;
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-2-(v-mn)/rg*(h-4)).toFixed(1)}`).join(" ");
+  const col={good:"#34d399",info:"#60a5fa",warn:"#fbbf24",bad:"#f87171"}[sig]||"#60a5fa";
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+function fmtVal(i){
+  if(i.value===null||i.value===undefined) return "—";
+  let v=Number(i.value);
+  let s=v.toLocaleString("en-US",{minimumFractionDigits:i.decimals,maximumFractionDigits:i.decimals});
+  if(i.unit==="$") return "$"+s;
+  return s+(i.unit&&i.unit!=="$"?" "+i.unit:"");
+}
+
+function render(d){
+  const c=d.composite;
+  let html=`<header><h1>🌍 經濟局勢儀表板</h1><div class="upd">更新 ${esc(d.updated_tpe)} 台北</div></header>`;
+  if(d.mock) html+=`<div class="stale-banner" style="display:block">⚠️ 目前顯示測試資料（mock）——部署後執行 Action 即為真實數據</div>`;
+  else if(d.errors&&d.errors.length) html+=`<div class="stale-banner" style="display:block">⚠️ ${d.errors.length} 個來源今日抓取失敗，相關指標沿用前值</div>`;
+
+  // 總評
+  html+=`<div class="hero" style="--hero-c:${HERO_C[c.color]||"var(--blue)"}">
+    <div class="lv"><span class="badge">${esc(c.level)}</span>
+      <div class="score"><b>${c.score}</b><span>/100 綜合分</span></div></div>
+    <div class="gaugebar"><i style="left:${c.score}%"></i></div>
+    <p>${esc(c.summary)}</p>
+    <div class="chips">
+      <span class="chip liq">流動性開關：${c.liq_on?"ON 進攻":"OFF 防禦"}</span>
+      <span class="chip ${c.crisis_flags.length?"cr":"liq"}">危機警訊 ${c.crisis_flags.length}/${c.crisis_total}</span>
+      ${c.crisis_flags.map(f=>`<span class="chip cr">⚠ ${esc(f)}</span>`).join("")}
+      ${c.opportunity_flags.map(f=>`<span class="chip op">💰 ${esc(f)}</span>`).join("")}
+    </div></div>`;
+
+  // 資金流向
+  html+=`<h2 class="sec">資金流向</h2><div class="secnote">錢正在往哪裡移動——「真正重要的是全球流動性從哪裡移動到哪裡」</div><div class="flows">`;
+  html+=d.flows.map(f=>`<div class="flow"><span class="ic">${FLOW_IC[f.dir]||"⚖️"}</span><span>${esc(f.text)}</span></div>`).join("");
+  html+=`</div>`;
+
+  // 資產影響矩陣
+  html+=`<h2 class="sec">資產影響矩陣</h2><div class="secnote">目前環境對各資產是順風還是逆風</div><div class="matrix">`;
+  html+=d.assets.map(a=>`<div class="tile"><div class="hd"><b>${esc(a.name)}</b><span class="st ${esc(a.stance)}">${esc(a.stance)}</span></div><p>${esc(a.note)}</p></div>`).join("");
+  html+=`</div>`;
+
+  // 指標分區
+  for(const g of d.groups){
+    const items=d.indicators.filter(i=>i.group===g.id);
+    if(!items.length) continue;
+    html+=`<h2 class="sec">${esc(g.title)}</h2><div class="secnote">${esc(g.note)}</div>`;
+    for(const i of items){
+      html+=`<div class="card" id="c-${i.id}">
+        <div class="row" onclick="this.parentNode.classList.toggle('open')">
+          <span class="dot ${i.signal}"></span>
+          <div class="nm"><b>${esc(i.label)}${i.opp?'<span class="oppflag">買點</span>':""}${i.stale?'<span class="stale-tag">前值</span>':""}</b>
+            <span>${esc(i.signal_text)}</span></div>
+          ${sparkline(i.spark,i.signal)}
+          <div class="val"><b>${fmtVal(i)}</b><span>${esc(i.change||"")}</span></div>
+        </div>
+        <div class="detail">
+          <div class="q">${esc(i.interp)}</div>
+          ${i.extra?`<div class="extra">${esc(i.extra)}</div>`:""}
+          <div class="meta">出處：${esc(i.ref)}｜資料：${esc(i.source)}｜${esc(i.date||"")}</div>
+        </div></div>`;
+    }
+  }
+
+  html+=`<footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
+  資料來源：FRED、Yahoo Finance、Stooq、CNN、CoinGecko、multpl。每日自動更新（台北時間早上）。
+  點任一指標卡可展開 Jane 的判讀邏輯與出處篇號。</footer>`;
+  document.getElementById("app").innerHTML=html;
+}
+
+fetch("data.json?t="+Date.now()).then(r=>{
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+}).then(render).catch(e=>{
+  document.getElementById("app").innerHTML=
+   `<header><h1>🌍 經濟局勢儀表板</h1></header>
+    <div class="loading">尚無資料。<br><br>請到 GitHub repo 的 Actions 頁面手動執行一次「update-data」workflow，<br>之後每天會自動更新。<br><small style="color:var(--tx3)">(${e})</small></div>`;
+});
+</script>
+</body>
+</html>
