@@ -407,7 +407,8 @@ def main():
 
     wal = last(S["walcl"]); walp = val_days_ago(S["walcl"], 90)
     wal_up = (wal is not None and walp is not None and wal > walp)
-    add("fed_bs", "liq", "Fed 資產負債表", wal / 1e6 if wal else None, "兆$", 2, S["walcl"],
+    add("fed_bs", "liq", "Fed 資產負債表", wal / 1e6 if wal else None, "兆$", 2,
+        [(d, v / 1e6) for d, v in S["walcl"]] if S["walcl"] else None,
         "good" if wal_up else "warn",
         "近3月擴張中＝流動性增加" if wal_up else "近3月縮減＝流動性收縮",
         "資產負債表擴大＝市場資金增加＝流動性擴張；縮表反之。每週四 H.4.1 報告更新。",
