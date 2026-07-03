@@ -135,6 +135,70 @@ def coingecko_stables():
     return share, usdt, usdc
 
 
+def frankfurter_dxy():
+    """Yahoo 被擋時的 DXY 備援：用 ECB 匯率按 ICE 公式計算（誤差約 ±0.3）"""
+    end = datetime.now().strftime("%Y-%m-%d")
+    start = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d")
+    j = json.loads(http_get(
+        f"https://api.frankfurter.dev/v1/{start}..{end}?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF"))
+    out = []
+    for d, r in sorted(j["rates"].items()):
+        try:
+            v = (50.14348112 * r["EUR"] ** 0.576 * r["JPY"] ** 0.136 * r["GBP"] ** 0.119
+                 * r["CAD"] ** 0.091 * r["SEK"] ** 0.042 * r["CHF"] ** 0.036)
+            out.append((d, round(v, 3)))
+        except KeyError:
+            pass
+    return out
+
+
+def dxy_series():
+    try:
+        s = yahoo("DX-Y.NYB")
+        if len(s) > 20:
+            return s
+    except Exception as e:
+        print(f"  yahoo dxy failed: {e}", flush=True)
+    return frankfurter_dxy()
+
+
+def coingecko_chart(coin_id):
+    j = json.loads(http_get(
+        f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days=365&interval=daily"))
+    seen, out = set(), []
+    for t, v in j["prices"]:
+        d = datetime.fromtimestamp(t / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        if d not in seen:
+            seen.add(d)
+            out.append((d, float(v)))
+    return out
+
+
+def gold_series():
+    try:
+        s = yahoo("GC=F")
+        if len(s) > 20:
+            return s
+    except Exception as e:
+        print(f"  yahoo gold failed: {e}", flush=True)
+    return coingecko_chart("pax-gold")  # PAXG ≈ 現貨金價
+
+
+def spx_series():
+    try:
+        s = yahoo("^GSPC")
+        if len(s) > 20:
+            return s
+    except Exception as e:
+        print(f"  yahoo spx failed: {e}", flush=True)
+    return fred("SP500")
+
+
+def er_api_twd():
+    j = json.loads(http_get("https://open.er-api.com/v6/latest/USD"))
+    return float(j["rates"]["TWD"])
+
+
 def multpl_cape():
     txt = http_get("https://www.multpl.com/shiller-pe")
     m = re.search(r"Current Shiller PE Ratio[^0-9]*([0-9]+\.[0-9]+)", txt.replace("\n", " "))
@@ -244,7 +308,7 @@ def main():
         S["btc"] = mock_series(105000, 2500, drift=80)
         S["stables"] = (44.0, 170e9, 133e9); S["cape"] = 38.5
     else:
-        grab("dxy", market, "DX-Y.NYB", "dx.f")
+        grab("dxy", dxy_series)
         grab("dgs2", fred, "DGS2")
         grab("walcl", fred, "WALCL")
         grab("rrp", fred, "RRPONTSYD")
@@ -261,10 +325,12 @@ def main():
         grab("umcsent", fred, "UMCSENT")
         grab("ffr", fred, "DFEDTARU")
         grab("fng", cnn_fear_greed)
-        grab("spx", market, "^GSPC", "^spx")
-        grab("gold", market, "GC=F", "xauusd")
+        grab("spx", spx_series)
+        grab("gold", gold_series)
         grab("copper", market, "HG=F", "hg.f")
+        grab("pcopp", fred, "PCOPPUSDM", 40)
         grab("twd", market, "TWD=X", "usdtwd")
+        grab("twd_now", er_api_twd)
         grab("btc", coingecko_btc)
         grab("stables", coingecko_stables)
         grab("cape", multpl_cape)
@@ -273,6 +339,12 @@ def main():
     # 銅金比
     gold_map = dict(S.get("gold") or [])
     cg = [(d, v / gold_map[d] * 1000) for d, v in (S.get("copper") or []) if d in gold_map and gold_map[d]]
+    if not cg and S.get("pcopp") and S.get("gold"):
+        # 備援：IMF 月頻銅價（$/噸→$/磅）÷ 當月金價
+        for d, v in S["pcopp"]:
+            gv = next((g for gd, g in S["gold"] if gd >= d), None)
+            if gv:
+                cg.append((d, v / 2204.62 / gv * 1000))
 
     # 累積型序列（來源只給當下值，跨執行累積歷史）
     def accumulate(ind_id, value):
@@ -576,12 +648,17 @@ def main():
         "CBDC篇165・思考脈絡篇237", "CoinGecko",
         extra=(f"USDT ${stables[1]/1e9:.0f}B・USDC ${stables[2]/1e9:.0f}B" if stables[1] else ""), acc=usdc_hist)
 
-    twd = S["twd"]; twd_last = last(twd)
-    add("usdtwd", "hegemony", "美元兌台幣", twd_last, "", 2, twd,
+    twd = S["twd"]; twd_last = last(twd); twd_acc = None
+    if not twd:
+        cur = S.get("twd_now")
+        if isinstance(cur, (int, float)):
+            twd_acc = accumulate("usdtwd", cur)
+            twd_last = cur
+    add("usdtwd", "hegemony", "美元兌台幣", twd_last, "", 2, twd if twd else None,
         "info",
         ("台幣偏強：分批買美元的區間" if (twd_last or 99) < 30 else "台幣偏弱：美元資產已具匯率順風") if twd_last else "",
         "Jane 的操作節奏：台幣強（匯率低）時分批買美元、升高時換回台幣；並用 DXY 提前預測台幣方向，避免事後反應。",
-        "文盲篇115/117", "Yahoo/Stooq")
+        "文盲篇115/117", "Yahoo/er-api", acc=twd_acc)
 
     # ---------------- 總評 ----------------
     W = {"liq": 25, "rates": 20, "crisis": 20, "econ": 15, "mood": 10, "hegemony": 10}
