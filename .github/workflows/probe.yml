@@ -4,17 +4,31 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe endpoints
+      - name: Probe endpoints with python urllib
         run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-          probe() { echo "=== $1"; curl -sS -m 20 -A "$UA" -o /tmp/out -w "HTTP %{http_code} | %{size_download}B | %{time_total}s\n" "$1" || echo "CURL FAIL"; head -c 150 /tmp/out; echo; echo; }
-          probe "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2"
-          probe "https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&file_type=json"
-          probe "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=5d&interval=1d"
-          probe "https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?range=5d&interval=1d"
-          probe "https://stooq.com/q/d/l/?s=%5Espx&i=d&d1=20260601&d2=20260703"
-          probe "https://stooq.pl/q/d/l/?s=%5Espx&i=d&d1=20260601&d2=20260703"
-          probe "https://open.er-api.com/v6/latest/USD"
-          probe "https://markets.newyorkfed.org/api/rp/reverserepo/propositions/search.json?startDate=2026-06-20"
-          probe "https://api.db.nomics.world/v22/series/BLS/cu/CUSR0000SA0?observations=1"
-          probe "https://www.federalreserve.gov/datadownload/Output.aspx?rel=H41&series=7205717d2b6ba9a9bc42f22c81b2e5cb&lastobs=10&from=&to=&filetype=csv&label=include&layout=seriescolumn"
+          python3 - <<'PYEOF'
+          import urllib.request, socket
+          socket.setdefaulttimeout(20)
+          UA={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36","Accept":"*/*"}
+          urls=[
+           ("fred_api_nokey","https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&file_type=json"),
+           ("yahoo1","https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=5d&interval=1d"),
+           ("yahoo2","https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?range=5d&interval=1d"),
+           ("stooq_com","https://stooq.com/q/d/l/?s=%5Espx&i=d&d1=20260601&d2=20260703"),
+           ("er_api","https://open.er-api.com/v6/latest/USD"),
+           ("nyfed_rrp","https://markets.newyorkfed.org/api/rp/reverserepo/propositions/search.json?startDate=2026-06-20"),
+           ("dbnomics_cpi","https://api.db.nomics.world/v22/series/BLS/cu/CUUR0000SA0?observations=1"),
+           ("frb_h41","https://www.federalreserve.gov/datadownload/Output.aspx?rel=H41&lastobs=5&filetype=csv"),
+           ("treasury_yield","https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv"),
+           ("bls_api","https://api.bls.gov/publicAPI/v2/timeseries/data/LNS14000000?latest=true"),
+          ]
+          for name,u in urls:
+              try:
+                  req=urllib.request.Request(u,headers=UA)
+                  r=urllib.request.urlopen(req,timeout=20)
+                  b=r.read(200)
+                  print(f"OK   {name} {r.status} {b[:120]!r}",flush=True)
+              except Exception as e:
+                  print(f"FAIL {name} {type(e).__name__} {e}",flush=True)
+          print("done")
+          PYEOF
