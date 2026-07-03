@@ -28,35 +28,52 @@ def http_get(url, headers=None, timeout=30):
 # ---------------- 資料來源 ----------------
 
 def fred(series_id, keep=400):
-    """FRED CSV → [(date, value)] 升冪"""
-    txt = http_get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}")
+    """FRED → [(date, value)] 升冪。優先用官方 API（需 FRED_API_KEY 環境變數，
+    GitHub Actions 的 IP 會被 FRED 網頁端封鎖，API 端點不受影響）。"""
+    key = os.environ.get("FRED_API_KEY", "").strip()
+    start = (datetime.now() - timedelta(days=1300)).strftime("%Y-%m-%d")
     out = []
-    for row in csv.reader(io.StringIO(txt)):
-        if len(row) < 2:
-            continue
-        d, v = row[0].strip(), row[1].strip()
-        if not re.match(r"\d{4}-\d{2}-\d{2}", d) or v in (".", ""):
-            continue
-        try:
-            out.append((d, float(v)))
-        except ValueError:
-            pass
+    if key:
+        url = (f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}"
+               f"&api_key={key}&file_type=json&observation_start={start}&sort_order=asc")
+        j = json.loads(http_get(url))
+        for o in j.get("observations", []):
+            if o.get("value") not in (".", "", None):
+                try:
+                    out.append((o["date"], float(o["value"])))
+                except ValueError:
+                    pass
+    else:
+        txt = http_get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}")
+        for row in csv.reader(io.StringIO(txt)):
+            if len(row) >= 2 and re.match(r"\d{4}-\d{2}-\d{2}", row[0].strip()) and row[1].strip() not in (".", ""):
+                try:
+                    out.append((row[0].strip(), float(row[1].strip())))
+                except ValueError:
+                    pass
     return out[-keep:]
 
 
 def yahoo(symbol, rng="1y"):
-    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}"
-           f"?range={rng}&interval=1d")
-    j = json.loads(http_get(url))
-    res = j["chart"]["result"][0]
-    ts = res["timestamp"]
-    closes = res["indicators"]["quote"][0]["close"]
-    out = []
-    for t, c in zip(ts, closes):
-        if c is None:
-            continue
-        out.append((datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"), float(c)))
-    return out
+    err = None
+    for host in ("query1", "query2"):
+        url = (f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(symbol)}"
+               f"?range={rng}&interval=1d")
+        try:
+            j = json.loads(http_get(url, timeout=20))
+            res = j["chart"]["result"][0]
+            ts = res["timestamp"]
+            closes = res["indicators"]["quote"][0]["close"]
+            out = []
+            for t, c in zip(ts, closes):
+                if c is None:
+                    continue
+                out.append((datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"), float(c)))
+            if out:
+                return out
+        except Exception as e:
+            err = e
+    raise err or RuntimeError("yahoo empty")
 
 
 def stooq(symbol):
@@ -188,16 +205,25 @@ def main():
 
     S = {}
     errors = []
+    _jobs = []
 
     def grab(key, fn, *a):
-        try:
-            S[key] = fn(*a)
-            n = len(S[key]) if isinstance(S[key], list) else S[key]
-            print(f"OK  {key}: {n}")
-        except Exception as e:
-            errors.append(f"{key}: {e}")
-            S[key] = []
-            print(f"ERR {key}: {e}")
+        _jobs.append((key, fn, a))
+
+    def run_jobs():
+        from concurrent.futures import ThreadPoolExecutor
+        ex = ThreadPoolExecutor(max_workers=8)
+        futs = {key: ex.submit(fn, *a) for key, fn, a in _jobs}
+        for key, fut in futs.items():
+            try:
+                S[key] = fut.result(timeout=75)
+                n = len(S[key]) if isinstance(S[key], list) else S[key]
+                print(f"OK  {key}: {n}", flush=True)
+            except Exception as e:
+                errors.append(f"{key}: {type(e).__name__} {e}")
+                S[key] = []
+                print(f"ERR {key}: {type(e).__name__} {e}", flush=True)
+        ex.shutdown(wait=False, cancel_futures=True)
 
     if MOCK:
         S["dxy"] = mock_series(101, 0.4); S["dgs2"] = mock_series(4.1, 0.04)
@@ -242,6 +268,7 @@ def main():
         grab("btc", coingecko_btc)
         grab("stables", coingecko_stables)
         grab("cape", multpl_cape)
+        run_jobs()
 
     # 銅金比
     gold_map = dict(S.get("gold") or [])
@@ -670,8 +697,11 @@ def main():
         "indicators": IND,
     }
     json.dump(data, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
-    print(f"\nWrote data.json  score={score} level={level} crisis={n_crisis} errors={len(errors)}")
+    print(f"\nWrote data.json  score={score} level={level} crisis={n_crisis} errors={len(errors)}", flush=True)
 
 
 if __name__ == "__main__":
+    import socket
+    socket.setdefaulttimeout(30)
     main()
+    os._exit(0)  # 若有懸掛的抓取執行緒，強制正常退出
