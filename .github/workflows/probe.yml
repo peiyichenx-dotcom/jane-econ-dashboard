@@ -1,0 +1,20 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe endpoints
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          probe() { echo "=== $1"; curl -sS -m 20 -A "$UA" -o /tmp/out -w "HTTP %{http_code} | %{size_download}B | %{time_total}s\n" "$1" || echo "CURL FAIL"; head -c 150 /tmp/out; echo; echo; }
+          probe "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2"
+          probe "https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&file_type=json"
+          probe "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=5d&interval=1d"
+          probe "https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?range=5d&interval=1d"
+          probe "https://stooq.com/q/d/l/?s=%5Espx&i=d&d1=20260601&d2=20260703"
+          probe "https://stooq.pl/q/d/l/?s=%5Espx&i=d&d1=20260601&d2=20260703"
+          probe "https://open.er-api.com/v6/latest/USD"
+          probe "https://markets.newyorkfed.org/api/rp/reverserepo/propositions/search.json?startDate=2026-06-20"
+          probe "https://api.db.nomics.world/v22/series/BLS/cu/CUSR0000SA0?observations=1"
+          probe "https://www.federalreserve.gov/datadownload/Output.aspx?rel=H41&series=7205717d2b6ba9a9bc42f22c81b2e5cb&lastobs=10&from=&to=&filetype=csv&label=include&layout=seriescolumn"
