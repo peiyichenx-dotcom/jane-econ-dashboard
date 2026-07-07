@@ -114,8 +114,21 @@ def cnn_fear_greed():
     return hist[-260:]
 
 
+def cg_get(url):
+    """CoinGecko 免費版易 429，退避重試兩次"""
+    import time
+    for i in range(3):
+        try:
+            return http_get(url)
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and i < 2:
+                time.sleep(22)
+                continue
+            raise
+
+
 def coingecko_btc():
-    j = json.loads(http_get(
+    j = json.loads(cg_get(
         "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily"))
     seen, out = set(), []
     for t, v in j["prices"]:
@@ -127,7 +140,7 @@ def coingecko_btc():
 
 
 def coingecko_stables():
-    j = json.loads(http_get(
+    j = json.loads(cg_get(
         "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=tether,usd-coin"))
     caps = {c["id"]: c["market_cap"] for c in j}
     usdt, usdc = caps.get("tether", 0), caps.get("usd-coin", 0)
@@ -163,7 +176,7 @@ def dxy_series():
 
 
 def coingecko_chart(coin_id):
-    j = json.loads(http_get(
+    j = json.loads(cg_get(
         f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days=365&interval=daily"))
     seen, out = set(), []
     for t, v in j["prices"]:
