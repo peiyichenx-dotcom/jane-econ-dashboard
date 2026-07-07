@@ -13,7 +13,7 @@
 <style>
 :root{
   --bg:#0b0f1a; --card:#131a2b; --card2:#1a2338; --line:#232e4a;
-  --tx:#e8ecf6; --tx2:#8b96b3; --tx3:#5b6683;
+  --tx:#e8ecf6; --tx2:#8b96b3; --tx3:#6b7793;
   --good:#34d399; --info:#60a5fa; --warn:#fbbf24; --bad:#f87171;
   --green:#10b981; --blue:#3b82f6; --orange:#f59e0b; --red:#ef4444;
 }
@@ -26,7 +26,7 @@ header{display:flex;justify-content:space-between;align-items:baseline;padding:6
 header h1{font-size:17px;font-weight:700;letter-spacing:.5px}
 header .upd{font-size:11px;color:var(--tx3)}
 .stale-banner{background:#3a2b12;color:#fbbf24;border:1px solid #6b4e1a;border-radius:10px;
-  padding:8px 12px;font-size:12px;margin-bottom:12px;display:none}
+  padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px}
 
 /* 總評 */
 .hero{border-radius:18px;padding:18px 16px 16px;margin-bottom:14px;position:relative;overflow:hidden;
@@ -38,10 +38,14 @@ header .upd{font-size:11px;color:var(--tx3)}
 .hero .score{margin-left:auto;text-align:right}
 .hero .score b{font-size:30px;font-weight:800;color:var(--hero-c)}
 .hero .score span{font-size:11px;color:var(--tx3);display:block;margin-top:-4px}
-.gaugebar{height:8px;border-radius:4px;margin:12px 0 10px;position:relative;background:
+.gaugewrap{position:relative;margin:12px 0 2px}
+.gaugebar{height:8px;border-radius:4px;position:relative;background:
   linear-gradient(90deg,#ef4444 0 25%,#f59e0b 25% 45%,#3b82f6 45% 68%,#10b981 68% 100%);opacity:.9}
 .gaugebar i{position:absolute;top:-4px;width:4px;height:16px;background:#fff;border-radius:2px;
   box-shadow:0 0 6px rgba(255,255,255,.8);transform:translateX(-2px)}
+.gaugebar b{position:absolute;top:-2px;width:2px;height:12px;background:rgba(255,255,255,.5);transform:translateX(-1px)}
+.gscale{display:flex;font-size:9.5px;color:var(--tx3);margin:4px 0 8px;position:relative;height:12px}
+.gscale span{position:absolute;transform:translateX(-50%)}
 .hero p{font-size:13px;color:var(--tx2);position:relative}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;position:relative}
 .chip{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid}
@@ -53,6 +57,9 @@ header .upd{font-size:11px;color:var(--tx3)}
 h2.sec{font-size:14px;font-weight:700;margin:20px 2px 3px;display:flex;align-items:center;gap:8px}
 h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--info)}
 .secnote{font-size:11px;color:var(--tx3);margin:0 2px 9px 14px}
+.watchrow{display:flex;flex-wrap:wrap;gap:5px;margin:0 2px 10px 14px}
+.watch{font-size:10.5px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);color:var(--tx3)}
+.watch.on{color:var(--bad);border-color:#5b2530;background:#2a1520;font-weight:700}
 
 /* 資金流向 */
 .flows{display:flex;flex-direction:column;gap:8px}
@@ -70,18 +77,21 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .dot.bad{background:var(--bad);box-shadow:0 0 8px rgba(248,113,113,.55)}
 .row .nm{flex:1;min-width:0}
 .row .nm b{font-size:13.5px;font-weight:600;display:block}
-.row .nm span{font-size:11px;color:var(--tx2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .nm span{font-size:11px;color:var(--tx2);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
 .row .val{text-align:right;flex-shrink:0}
 .row .val b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
-.row .val span{font-size:10.5px;color:var(--tx3);display:block}
-.row svg{flex-shrink:0;opacity:.9}
+.row .val span{font-size:10px;color:var(--tx3);display:block}
+.row svg{flex-shrink:0;opacity:.92}
+.chev{color:var(--tx3);font-size:10px;flex-shrink:0;transition:transform .18s;margin-left:-2px}
+.card.open .chev{transform:rotate(180deg)}
 .oppflag{font-size:10px;color:#0b0f1a;background:var(--good);border-radius:4px;padding:1px 5px;
   font-weight:700;margin-left:5px;vertical-align:2px}
 .stale-tag{font-size:10px;color:var(--warn);margin-left:5px}
 .detail{display:none;padding:2px 14px 13px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--tx2)}
 .card.open .detail{display:block}
 .detail .q{padding:9px 0 5px}
-.detail .meta{font-size:11px;color:var(--tx3);margin-top:6px}
+.detail .meta{font-size:11.5px;color:var(--tx3);margin-top:6px}
 .detail .extra{color:var(--tx2);font-size:12px;margin-top:4px}
 
 /* 資產矩陣 */
@@ -97,25 +107,46 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .st.常備{color:var(--tx2);background:var(--card2)}
 .tile p{font-size:11px;color:var(--tx3);line-height:1.45}
 
-footer{margin-top:26px;padding:0 4px;font-size:10.5px;color:var(--tx3);line-height:1.7}
+.legend{font-size:10.5px;color:var(--tx3);margin:8px 2px 0;line-height:1.6}
+footer{margin-top:26px;padding:0 4px;font-size:11px;color:var(--tx3);line-height:1.7}
 .loading{text-align:center;padding:60px 20px;color:var(--tx2)}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"><div class="loading">載入資料中…</div></div>
 <script>
-const SIG_LABEL={good:"",info:"",warn:"",bad:""};
 const FLOW_IC={usd:"💵",risk:"🚀",safe:"🛡️",flat:"⚖️"};
 const HERO_C={green:"var(--green)",blue:"var(--blue)",orange:"var(--orange)",red:"var(--red)"};
+const SIG_C={good:"#34d399",info:"#60a5fa",warn:"#fbbf24",bad:"#f87171"};
 
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-function sparkline(vals,sig){
+function sparkline(vals,sig,refs){
   if(!vals||vals.length<2) return "";
-  const w=64,h=26,mn=Math.min(...vals),mx=Math.max(...vals),rg=(mx-mn)||1;
-  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-2-(v-mn)/rg*(h-4)).toFixed(1)}`).join(" ");
-  const col={good:"#34d399",info:"#60a5fa",warn:"#fbbf24",bad:"#f87171"}[sig]||"#60a5fa";
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  const w=64,h=26;
+  let mn=Math.min(...vals),mx=Math.max(...vals);
+  // 門檻線若在數據附近(範圍1.5倍內)，把它納入刻度
+  (refs||[]).forEach(r=>{const pad=(mx-mn)||1;if(r>mn-pad*1.5&&r<mx+pad*1.5){mn=Math.min(mn,r);mx=Math.max(mx,r);}});
+  const rg=(mx-mn)||1;
+  const y=v=>(h-2-(v-mn)/rg*(h-4));
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const col=SIG_C[sig]||"#60a5fa";
+  let reflines=(refs||[]).filter(r=>r>=mn&&r<=mx).map(r=>
+    `<line x1="0" y1="${y(r).toFixed(1)}" x2="${w}" y2="${y(r).toFixed(1)}" stroke="#8b96b3" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.55"/>`).join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${reflines}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+function bandbar(band,value){
+  // 門檻型指標：色帶＋現值指針（比折線更能看出「離門檻多遠」）
+  if(!band||value===null||value===undefined) return "";
+  const w=64,h=26,{min,max,zones}=band;
+  const x=v=>((Math.min(Math.max(v,min),max)-min)/(max-min)*w);
+  const rects=zones.map(z=>
+    `<rect x="${x(z[0]).toFixed(1)}" y="9" width="${(x(z[1])-x(z[0])).toFixed(1)}" height="8" rx="1.5" fill="${SIG_C[z[2]]}" opacity="0.4"/>`).join("");
+  const vx=x(Number(value)).toFixed(1);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${rects}
+    <line x1="${vx}" y1="4" x2="${vx}" y2="22" stroke="#fff" stroke-width="2"/>
+    <polygon points="${vx-3},2 ${Number(vx)+3},2 ${vx},7" fill="#fff"/></svg>`;
 }
 
 function fmtVal(i){
@@ -126,27 +157,38 @@ function fmtVal(i){
   return s+(i.unit&&i.unit!=="$"?" "+i.unit:"");
 }
 
+function staleHours(d){
+  try{
+    const t=Date.parse(d.updated_utc.replace(" UTC","Z").replace(" ","T"));
+    return (Date.now()-t)/36e5;
+  }catch(e){return 0}
+}
+
 function render(d){
   const c=d.composite;
   let html=`<header><h1>🌍 經濟局勢儀表板</h1><div class="upd">更新 ${esc(d.updated_tpe)} 台北</div></header>`;
-  if(d.mock) html+=`<div class="stale-banner" style="display:block">⚠️ 目前顯示測試資料（mock）——部署後執行 Action 即為真實數據</div>`;
-  else if(d.errors&&d.errors.length) html+=`<div class="stale-banner" style="display:block">⚠️ ${d.errors.length} 個來源今日抓取失敗，相關指標沿用前值</div>`;
+  const age=staleHours(d);
+  if(age>26) html+=`<div class="stale-banner">⚠️ 資料已 ${Math.floor(age)} 小時未更新（最後：${esc(d.updated_tpe)}）——以下數字可能過期，判斷前請留意。</div>`;
+  if(d.mock) html+=`<div class="stale-banner">⚠️ 目前顯示測試資料（mock）</div>`;
+  else if(d.errors&&d.errors.length) html+=`<div class="stale-banner">⚠️ ${d.errors.length} 個來源今日抓取失敗，相關指標沿用前值</div>`;
 
   // 總評
   html+=`<div class="hero" style="--hero-c:${HERO_C[c.color]||"var(--blue)"}">
     <div class="lv"><span class="badge">${esc(c.level)}</span>
       <div class="score"><b>${c.score}</b><span>/100 綜合分</span></div></div>
-    <div class="gaugebar"><i style="left:${c.score}%"></i></div>
+    <div class="gaugewrap">
+      <div class="gaugebar"><b style="left:25%"></b><b style="left:45%"></b><b style="left:68%"></b><i style="left:${c.score}%"></i></div>
+      <div class="gscale"><span style="left:12%">危機</span><span style="left:25%">25</span><span style="left:35%">防禦</span><span style="left:45%">45</span><span style="left:56%">中性</span><span style="left:68%">68</span><span style="left:84%">進攻</span></div>
+    </div>
     <p>${esc(c.summary)}</p>
     <div class="chips">
       <span class="chip liq">流動性開關：${c.liq_on?"ON 進攻":"OFF 防禦"}</span>
       <span class="chip ${c.crisis_flags.length?"cr":"liq"}">危機警訊 ${c.crisis_flags.length}/${c.crisis_total}</span>
-      ${c.crisis_flags.map(f=>`<span class="chip cr">⚠ ${esc(f)}</span>`).join("")}
       ${c.opportunity_flags.map(f=>`<span class="chip op">💰 ${esc(f)}</span>`).join("")}
     </div></div>`;
 
   // 資金流向
-  html+=`<h2 class="sec">資金流向</h2><div class="secnote">錢正在往哪裡移動——「真正重要的是全球流動性從哪裡移動到哪裡」</div><div class="flows">`;
+  html+=`<h2 class="sec">資金流向</h2><div class="secnote">錢正在往哪裡移動——重點是全球流動性從哪裡移動到哪裡</div><div class="flows">`;
   html+=d.flows.map(f=>`<div class="flow"><span class="ic">${FLOW_IC[f.dir]||"⚖️"}</span><span>${esc(f.text)}</span></div>`).join("");
   html+=`</div>`;
 
@@ -160,14 +202,20 @@ function render(d){
     const items=d.indicators.filter(i=>i.group===g.id);
     if(!items.length) continue;
     html+=`<h2 class="sec">${esc(g.title)}</h2><div class="secnote">${esc(g.note)}</div>`;
+    if(g.id==="crisis"&&c.watchlist){
+      html+=`<div class="watchrow">${c.watchlist.map(w=>
+        `<span class="watch${w.fired?" on":""}">${w.fired?"⚠":"✓"} ${esc(w.name)}</span>`).join("")}</div>`;
+    }
     for(const i of items){
+      const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs);
       html+=`<div class="card" id="c-${i.id}">
         <div class="row" onclick="this.parentNode.classList.toggle('open')">
           <span class="dot ${i.signal}"></span>
           <div class="nm"><b>${esc(i.label)}${i.opp?'<span class="oppflag">買點</span>':""}${i.stale?'<span class="stale-tag">前值</span>':""}</b>
             <span>${esc(i.signal_text)}</span></div>
-          ${sparkline(i.spark,i.signal)}
-          <div class="val"><b>${fmtVal(i)}</b><span>${esc(i.change||"")}</span></div>
+          ${viz}
+          <div class="val"><b>${fmtVal(i)}</b><span>${i.change?("週 "+esc(i.change)):""}</span></div>
+          <span class="chev">▼</span>
         </div>
         <div class="detail">
           <div class="q">${esc(i.interp)}</div>
@@ -177,9 +225,10 @@ function render(d){
     }
   }
 
-  html+=`<footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
-  資料來源：FRED、Yahoo Finance、Stooq、CNN、CoinGecko、multpl。每日自動更新（台北時間早上）。
-  點任一指標卡可展開 Jane 的判讀邏輯與出處篇號。</footer>`;
+  html+=`<div class="legend">圖例：● 綠＝對進攻/風險資產有利（含「大跌＝買點」的反向邏輯，綠≠市場在漲）｜● 藍＝中性｜● 黃＝留意｜● 紅＝警戒。
+  「週」＝與約一週前相比。色帶圖＝現值（白針）落在哪個門檻區。虛線＝Jane 的判斷門檻。點卡片展開判讀邏輯與出處。</div>
+  <footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
+  資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。</footer>`;
   document.getElementById("app").innerHTML=html;
 }
 
@@ -189,7 +238,7 @@ fetch("data.json?t="+Date.now()).then(r=>{
 }).then(render).catch(e=>{
   document.getElementById("app").innerHTML=
    `<header><h1>🌍 經濟局勢儀表板</h1></header>
-    <div class="loading">尚無資料。<br><br>請到 GitHub repo 的 Actions 頁面手動執行一次「update-data」workflow，<br>之後每天會自動更新。<br><small style="color:var(--tx3)">(${e})</small></div>`;
+    <div class="loading">尚無資料。<br><br>請到 GitHub repo 的 Actions 頁面手動執行一次「update-data」workflow。<br><small style="color:var(--tx3)">(${e})</small></div>`;
 });
 </script>
 </body>
