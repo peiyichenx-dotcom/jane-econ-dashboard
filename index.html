@@ -25,6 +25,11 @@ body{background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSyst
 header{display:flex;justify-content:space-between;align-items:baseline;padding:6px 2px 12px}
 header h1{font-size:17px;font-weight:700;letter-spacing:.5px}
 header .upd{font-size:11px;color:var(--tx3)}
+header .hr{display:flex;align-items:center;gap:8px}
+#refbtn{background:var(--card2);border:1px solid var(--line);color:var(--tx2);border-radius:8px;
+  font-size:11px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+#refbtn:disabled{opacity:.6}
+#refbtn.busy{color:var(--warn);border-color:#6b4e1a}
 .stale-banner{background:#3a2b12;color:#fbbf24;border:1px solid #6b4e1a;border-radius:10px;
   padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px}
 
@@ -165,8 +170,11 @@ function staleHours(d){
 }
 
 function render(d){
+  CUR_UPDATED=d.updated_utc;
   const c=d.composite;
-  let html=`<header><h1>🌍 經濟局勢儀表板</h1><div class="upd">更新 ${esc(d.updated_tpe)} 台北</div></header>`;
+  let html=`<header><h1>🌍 經濟局勢儀表板</h1><div class="hr">
+    <div class="upd">更新 ${esc(d.updated_tpe)} 台北</div>
+    <button id="refbtn" onclick="manualUpdate()">🔄 立即更新</button></div></header>`;
   const age=staleHours(d);
   if(age>26) html+=`<div class="stale-banner">⚠️ 資料已 ${Math.floor(age)} 小時未更新（最後：${esc(d.updated_tpe)}）——以下數字可能過期，判斷前請留意。</div>`;
   if(d.mock) html+=`<div class="stale-banner">⚠️ 目前顯示測試資料（mock）</div>`;
@@ -230,6 +238,50 @@ function render(d){
   <footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
   資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。</footer>`;
   document.getElementById("app").innerHTML=html;
+}
+
+// ---- 手動更新：觸發 GitHub Actions（token 只存在本機瀏覽器） ----
+const REPO="peiyichenx-dotcom/jane-econ-dashboard";
+let CUR_UPDATED="";
+async function manualUpdate(){
+  const btn=document.getElementById("refbtn");
+  let tok=localStorage.getItem("gh_token");
+  if(!tok){
+    tok=prompt("第一次使用手動更新，請貼上 GitHub Token（之後不用再輸入，只存在這支手機的瀏覽器裡）。\n\n建立方式：GitHub → Settings → Developer settings → Fine-grained tokens → 只勾 jane-econ-dashboard 這個 repo → Permissions 把 Actions 設為 Read and write → Generate。");
+    if(!tok) return;
+    localStorage.setItem("gh_token",tok.trim());
+    tok=tok.trim();
+  }
+  btn.disabled=true;btn.classList.add("busy");btn.textContent="⏳ 觸發中…";
+  try{
+    const r=await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/update.yml/dispatches`,{
+      method:"POST",
+      headers:{Authorization:"Bearer "+tok,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"},
+      body:JSON.stringify({ref:"main"})});
+    if(r.status===204){
+      let n=0;
+      btn.textContent="⏳ 更新中…約1–2分鐘";
+      const timer=setInterval(async()=>{
+        n++;
+        try{
+          const d2=await (await fetch("data.json?t="+Date.now(),{cache:"no-store"})).json();
+          if(d2.updated_utc!==CUR_UPDATED){clearInterval(timer);render(d2);return;}
+        }catch(e){}
+        if(n>=30){clearInterval(timer);btn.disabled=false;btn.classList.remove("busy");
+          btn.textContent="🔄 立即更新";alert("更新流程已觸發，但頁面等超過5分鐘未收到新資料。稍後手動重新整理即可，或到 GitHub Actions 查看執行狀態。");}
+      },10000);
+    }else if(r.status===401||r.status===403){
+      localStorage.removeItem("gh_token");
+      btn.disabled=false;btn.classList.remove("busy");btn.textContent="🔄 立即更新";
+      alert("Token 無效或權限不足（需要該 repo 的 Actions: Read and write）。已清除，請再按一次並貼上新的 token。");
+    }else{
+      btn.disabled=false;btn.classList.remove("busy");btn.textContent="🔄 立即更新";
+      alert("觸發失敗（HTTP "+r.status+"），請稍後再試。");
+    }
+  }catch(e){
+    btn.disabled=false;btn.classList.remove("busy");btn.textContent="🔄 立即更新";
+    alert("網路錯誤："+e);
+  }
 }
 
 fetch("data.json?t="+Date.now()).then(r=>{
