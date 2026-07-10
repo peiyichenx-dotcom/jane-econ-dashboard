@@ -352,6 +352,7 @@ def main():
     # 銅金比
     gold_map = dict(S.get("gold") or [])
     cg = [(d, v / gold_map[d] * 1000) for d, v in (S.get("copper") or []) if d in gold_map and gold_map[d]]
+    cg_freq = "d" if cg else "m"  # 備援鏈是月頻 IMF 銅價
     if not cg and S.get("pcopp") and S.get("gold"):
         # 備援：IMF 月頻銅價（$/噸→$/磅）÷ 當月金價
         for d, v in S["pcopp"]:
@@ -383,20 +384,34 @@ def main():
 
     def add(id, group, label, value, unit, decimals, series=None, signal="info",
             signal_text="", interp="", ref="", source="", extra="", opp=False, acc=None,
-            band=None, refs=None):
+            band=None, refs=None, freq="d", expect=None, change_override=None):
+        # freq: 資料本身的頻率（d/w/m）→ 決定變化欄標籤與比較區間
+        # expect: 指標「應有」的新鮮度（預設同 freq）→ 超齡標示 old
         if value is None and id in prev_ind:
             p = dict(prev_ind[id]); p["stale"] = True
             IND.append(p); return
+        per = {"d": 8, "w": 12, "m": 32}.get(freq, 8)
+        lab = "月" if freq == "m" else "週"
+        chg = change_override if change_override is not None else (
+            fmt_change(last(series), val_days_ago(series, per), decimals) if series else "")
+        dt = last_date(series) if series else datetime.now(TPE).strftime("%Y-%m-%d")
+        limits = {"d": 10, "w": 25, "m": 75}
+        old = False
+        try:
+            old = (datetime.now(TPE).date() - datetime.strptime(dt, "%Y-%m-%d").date()).days \
+                  > limits.get(expect or freq, 10)
+        except Exception:
+            pass
         IND.append({
             "id": id, "group": group, "label": label,
             "value": (round(value, decimals) if isinstance(value, (int, float)) else value),
             "unit": unit, "decimals": decimals,
-            "date": last_date(series) if series else datetime.now(TPE).strftime("%Y-%m-%d"),
-            "change": fmt_change(last(series), val_days_ago(series, 8), decimals) if series else "",
+            "date": dt,
+            "change": chg, "chg_label": lab,
             "signal": signal, "signal_text": signal_text, "interp": interp,
             "ref": ref, "source": source, "extra": extra,
             "spark": spark(series) if series else ([v for _, v in (acc or [])]),
-            "opp": opp, "stale": False, "acc": acc,
+            "opp": opp, "stale": False, "old": old, "acc": acc,
             "band": band, "refs": refs,
         })
 
@@ -433,7 +448,7 @@ def main():
         "good" if wal_up else "warn",
         "近3月擴張中＝流動性增加" if wal_up else "近3月縮減＝流動性收縮",
         "資產負債表擴大＝市場資金增加＝流動性擴張；縮表反之。每週四 H.4.1 報告更新。",
-        "手冊篇225", "FRED WALCL")
+        "手冊篇225", "FRED WALCL", freq="w")
 
     rrp = last(S["rrp"]); rrpp = val_days_ago(S["rrp"], 30)
     rrp_down = (rrp is not None and rrpp is not None and rrp <= rrpp)
@@ -450,7 +465,7 @@ def main():
         ("M2 擴張：資金流向資產市場" if (m2y is not None and m2y > 3) else
          ("M2 收縮：市場承壓" if (m2y is not None and m2y < 0) else "溫和增長")),
         "M2 增加＝市場資金變多、流向資產市場。與 Fed 資產負債表、RRP 合成 Jane 的流動性總公式：Fed↑＋RRP↓＋M2↑＝進攻訊號，反之防禦。",
-        "手冊篇225", "FRED M2SL", refs=[0],
+        "手冊篇225", "FRED M2SL", refs=[0], freq="m",
         extra=f"最新 M2 ≈ ${last(S['m2'])/1000:.1f}T（{last_date(S['m2'])}）" if last(S["m2"]) else "")
 
     liq_score = sum([1 if wal_up else 0, 1 if rrp_ok else 0, 1 if (m2y or 0) > 0 else 0])
@@ -539,7 +554,7 @@ def main():
         ("突破30萬件：衰退前兆" if (ic_k or 0) > 300 else
          ("升溫中，密切觀察" if (ic_k or 0) > 260 else "就業市場穩定")),
         "單週暴增至30萬件以上＝消費放緩與衰退前兆（2008、2020危機前皆飆升）。Jane 列為最早察覺實體經濟崩跌的方法首位。週資料毛躁，看四週趨勢。",
-        "最快最簡單篇243", "FRED ICSA", refs=[300])
+        "最快最簡單篇243", "FRED ICSA", refs=[300], freq="w")
 
     cgv = last(cg); cgp = val_days_ago(cg, 60)
     cg_fall = cgv is not None and cgp is not None and cgv < cgp * 0.9
@@ -549,7 +564,7 @@ def main():
         "bad" if cg_fall else "info",
         "快速下跌：全球景氣信心惡化" if cg_fall else "未見急跌，景氣信心尚穩",
         "銅代表工業需求、黃金代表避險需求：銅金比快速下跌＝市場對全球景氣的信心急劇惡化、衰退風險上升。換算：銅價($/lb)÷金價($/oz)×1000，數字本身無意義，看方向與速度。",
-        "手冊篇145", "Yahoo/FRED",
+        "手冊篇145", "Yahoo/FRED", freq=cg_freq, expect="d",
         extra=(f"銅 ${last(S['copper']):.2f}/lb・金 ${last(S['gold']):,.0f}/oz"
                if last(S.get("copper") or []) and last(S.get("gold") or []) else ""))
 
@@ -565,7 +580,7 @@ def main():
           (f"較12月低點+{un_rise:.1f}pp，開始鬆動" if (un_rise or 0) >= 0.4 else "就業穩定，Fed 無急迫降息壓力"))
          if un_rise is not None else ""),
         "失業率自低點上升近1個百分點的情況，歷史上幾乎只出現在衰退期間＝衰退訊號＋Fed 降息的依據。Jane 認為就業數據才是 Fed 決策的真正核心。",
-        "思考脈絡篇188・手冊篇74", "FRED UNRATE")
+        "思考脈絡篇188・手冊篇74", "FRED UNRATE", freq="m")
 
     cpi_y = yoy(S["cpi"]); cpi_series = yoy_series(S["cpi"]); sig = st = None
     if cpi_y is not None:
@@ -575,7 +590,7 @@ def main():
         else: sig, st = "good", "接近 Fed 2% 目標區"
     add("cpi", "econ", "CPI 年增率", cpi_y, "%", 1, cpi_series, sig or "info", st or "",
         "門檻：4–5%以上＝通膨手冊啟動（買原物料/能源/黃金）；2%＝Fed 目標；3–4%以上且 GDP 停滯＝停滯性通膨（黃金史上最佳環境）。方向比水位重要：在降途與回升途是兩種劇本。",
-        "手冊篇35/153", "FRED CPIAUCSL", refs=[2, 4],
+        "手冊篇35/153", "FRED CPIAUCSL", refs=[2, 4], freq="m",
         extra=f"資料月份：{last_date(S['cpi'])}" if S["cpi"] else "")
 
     rs = S["retail"]
@@ -588,7 +603,7 @@ def main():
         ("連3個月負成長：消費萎縮正式開始" if neg3 else
          ("年增轉負，留意" if (rs_yoy or 0) < 0 else "消費維持擴張（占GDP逾60%）")),
         "連續3個月以上負成長＝消費萎縮正式開始。消費占美國 GDP 逾60%，股市對消費變化極為敏感。注意：名目值，高通膨時期會虛胖，要配 CPI 一起讀。",
-        "最快最簡單篇243", "FRED RSAFS", refs=[0], extra=f"資料月份：{last_date(rs)}" if rs else "")
+        "最快最簡單篇243", "FRED RSAFS", refs=[0], freq="m", extra=f"資料月份：{last_date(rs)}" if rs else "")
 
     um = last(S["umcsent"]); ump = val_days_ago(S["umcsent"], 120)
     um_drop = um is not None and ump is not None and um < ump * 0.88
@@ -597,7 +612,7 @@ def main():
         ("信心低迷：衰退風險區" if (um or 99) < 60 else
          ("急跌中：Jane 的衰退將至訊號" if um_drop else "信心尚穩")),
         "消費信心急跌＝衰退將至的訊號（Jane 引 Conference Board <70 門檻；此處用密大指數，約 <60 為對應低迷區）。",
-        "手冊篇25・篇243", "FRED UMCSENT")
+        "手冊篇25・篇243", "FRED UMCSENT", freq="m")
 
     # === 五、市場情緒與時機開關 ===
     fng = last(S["fng"])
@@ -616,8 +631,12 @@ def main():
         band={"min": 0, "max": 100, "zones": [[0, 20, "good"], [20, 45, "info"], [45, 55, "info"], [55, 80, "warn"], [80, 100, "bad"]]})
 
     spx = S["spx"]; spx_last = last(spx)
-    ath = max((v for _, v in spx), default=None) if spx else None
+    # 週期高點：跨執行累積的歷史最高（滾動一年窗在長熊市會讓高點下移、買點階梯失真）
+    spx_1y_max = max((v for _, v in spx), default=None) if spx else None
+    prev_high = (prev_data.get("meta") or {}).get("spx_high")
+    ath = max([x for x in (prev_high, spx_1y_max) if x], default=None)
     dd = (spx_last / ath - 1) * 100 if (spx_last and ath) else None
+    dd_prev8 = ((val_days_ago(spx, 8) / ath - 1) * 100) if (spx and ath) else None
     opp_dd = dd is not None and dd <= -20
     sig = st = None
     if dd is not None:
@@ -628,11 +647,12 @@ def main():
         else: sig, st = "info", "接近高點區，遵守賣出紀律"
     if opp_dd:
         crisis_flags.append("S&P自高點跌逾20%")
-    add("spx_dd", "mood", "S&P500 距近一年高點", dd, "%", 1, spx, sig or "info", st or "",
+    add("spx_dd", "mood", "S&P500 距週期高點", dd, "%", 1, spx, sig or "info", st or "",
         "分批公式：跌20%→第一買；30%→第二買；40%以上→全投入。賣出端：較前高+30%以上→先賣一半。機械式規則的意義：到時候你一定不敢，所以現在就寫死。",
         "最快最簡單篇11/12/48/116", "Yahoo/FRED",
         band={"min": -45, "max": 5, "zones": [[-45, -40, "good"], [-40, -30, "good"], [-30, -20, "good"], [-20, -10, "warn"], [-10, 5, "info"]]},
-        extra=f"S&P500 {spx_last:,.0f}・一年高點 {ath:,.0f}" if spx_last and ath else "", opp=opp_dd)
+        extra=f"S&P500 {spx_last:,.0f}・週期高點 {ath:,.0f}" if spx_last and ath else "", opp=opp_dd,
+        change_override=fmt_change(dd, dd_prev8, 1, "pp"))
 
     ma200 = sma(spx, 200)
     above = spx_last is not None and ma200 is not None and spx_last >= ma200
@@ -694,15 +714,41 @@ def main():
         "文盲篇115/117", "Yahoo/er-api", acc=twd_acc)
 
     # ---------------- 總評 ----------------
+    # 綜合分只衡量「短期資金流環境」；CAPE 屬長期週期尺度，移出計分（篇225：不要混在一起看）
     W = {"liq": 25, "rates": 20, "crisis": 20, "econ": 15, "mood": 10, "hegemony": 10}
     smap = {"good": 1.0, "info": 0.55, "warn": 0.3, "bad": 0.0}
     gsum, gw = {}, {}
     for i in IND:
+        if i["id"] == "cape":
+            continue
         g = i["group"]
         gsum[g] = gsum.get(g, 0) + smap.get(i["signal"], 0.5)
         gw[g] = gw.get(g, 0) + 1
     score = sum(W[g] * (gsum[g] / gw[g]) for g in gsum if g in W)
     score = round(score / sum(W[g] for g in gsum if g in W) * 100)
+
+    # 週期位置（長期尺度）：決定倉位上限與現金底線，不決定買賣時點
+    cyc_pts = []
+    if (cape_cur or 0) > 35:
+        cyc_pts.append(f"CAPE {cape_cur:.0f} 極度過熱")
+    elif (cape_cur or 0) > 30:
+        cyc_pts.append(f"CAPE {cape_cur:.0f} 高估值警戒")
+    if cpi_y is not None and cpi_series and len(cpi_series) >= 7 and cpi_y > 3 and cpi_y > cpi_series[-7][1]:
+        cyc_pts.append("通膨回升途")
+    if (un_rise or 0) >= 0.4:
+        cyc_pts.append("就業鬆動")
+    if was_inverted_recent and yc is not None and yc >= 0:
+        cyc_pts.append("倒掛解除後觀察期")
+    if rr is not None and rr > 2.3:
+        cyc_pts.append("實質利率偏高")
+    if (cape_cur or 0) > 35 or len(cyc_pts) >= 3:
+        cyc_label, cyc_cash = "週期尾端・貴", "30–40%"
+    elif (cape_cur or 0) > 30 or len(cyc_pts) == 2:
+        cyc_label, cyc_cash = "週期中後段", "20–30%"
+    else:
+        cyc_label, cyc_cash = "週期健康區", "10–30%"
+    cycle = {"label": cyc_label, "points": cyc_pts, "cash": cyc_cash,
+             "cape": round(cape_cur, 1) if cape_cur else None}
 
     n_crisis = len(crisis_flags)
     if n_crisis >= 5:
@@ -789,17 +835,26 @@ def main():
          "note": ("買點旗標出現：這就是保留30%現金在等的時刻" if opps else "Jane 鐵律：平時至少10–30%現金，過熱時提高到40–50%")},
     ]
 
+    # 危機燈 ↔ 指標對照：資料過舊或沿用前值時，該燈標示「無法判定」而非亮綠
+    _WL = {"殖利率曲線倒掛": "curve", "信用利差急擴": "hy_spread", "VIX>30 恐慌": "vix",
+           "初領失業金>30萬": "claims", "銅金比急跌": "copper_gold", "失業率快速上升": "unrate",
+           "零售連3月負成長": "retail", "S&P自高點跌逾20%": "spx_dd"}
+    _bid = {i["id"]: i for i in IND}
+
     data = {
         "updated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "updated_tpe": datetime.now(TPE).strftime("%Y-%m-%d %H:%M"),
         "mock": MOCK,
         "errors": errors,
         "composite": {"score": score, "level": level, "color": color, "summary": summary,
-                      "crisis_flags": crisis_flags, "crisis_total": 8,
-                      "watchlist": [{"name": w, "fired": w in crisis_flags} for w in
-                                    ["殖利率曲線倒掛", "信用利差急擴", "VIX>30 恐慌", "初領失業金>30萬",
-                                     "銅金比急跌", "失業率快速上升", "零售連3月負成長", "S&P自高點跌逾20%"]],
+                      "crisis_flags": crisis_flags, "crisis_total": 8, "cycle": cycle,
+                      "watchlist": [{"name": w,
+                                     "fired": w in crisis_flags,
+                                     "na": bool(_bid.get(_WL.get(w), {}).get("old") or _bid.get(_WL.get(w), {}).get("stale"))}
+                                    for w in ["殖利率曲線倒掛", "信用利差急擴", "VIX>30 恐慌", "初領失業金>30萬",
+                                              "銅金比急跌", "失業率快速上升", "零售連3月負成長", "S&P自高點跌逾20%"]],
                       "opportunity_flags": opps, "liq_on": liq_on},
+        "meta": {"spx_high": round(ath, 2) if ath else None},
         "flows": flows,
         "assets": assets,
         "groups": [
