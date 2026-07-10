@@ -57,6 +57,8 @@ header .hr{display:flex;align-items:center;gap:8px}
 .chip.cr{color:var(--bad);border-color:#5b2530;background:#2a1520}
 .chip.op{color:var(--good);border-color:#1d4a3a;background:#0f2a20}
 .chip.liq{color:var(--info);border-color:#274169;background:#131f38}
+.cyc{margin-top:11px;padding-top:9px;border-top:1px dashed var(--line);font-size:12px;color:var(--tx2);position:relative;line-height:1.55}
+.cyc b{color:var(--warn)}
 
 /* 區塊 */
 h2.sec{font-size:14px;font-weight:700;margin:20px 2px 3px;display:flex;align-items:center;gap:8px}
@@ -65,6 +67,7 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .watchrow{display:flex;flex-wrap:wrap;gap:5px;margin:0 2px 10px 14px}
 .watch{font-size:10.5px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);color:var(--tx3)}
 .watch.on{color:var(--bad);border-color:#5b2530;background:#2a1520;font-weight:700}
+.watch.na{color:var(--tx3);border-style:dashed;opacity:.75}
 
 /* 資金流向 */
 .flows{display:flex;flex-direction:column;gap:8px}
@@ -193,7 +196,8 @@ function render(d){
       <span class="chip liq">流動性開關：${c.liq_on?"ON 進攻":"OFF 防禦"}</span>
       <span class="chip ${c.crisis_flags.length?"cr":"liq"}">危機警訊 ${c.crisis_flags.length}/${c.crisis_total}</span>
       ${c.opportunity_flags.map(f=>`<span class="chip op">💰 ${esc(f)}</span>`).join("")}
-    </div></div>`;
+    </div>
+    ${c.cycle?`<div class="cyc">📐 週期位置（長期尺度，不計入綜合分）：<b>${esc(c.cycle.label)}</b>${c.cycle.points&&c.cycle.points.length?"｜"+c.cycle.points.map(esc).join("・"):""}<br>→ 現金底線建議 ${esc(c.cycle.cash)}——估值決定倉位上限與現金底線，不決定買賣時點</div>`:""}</div>`;
 
   // 資金流向
   html+=`<h2 class="sec">資金流向</h2><div class="secnote">錢正在往哪裡移動——重點是全球流動性從哪裡移動到哪裡</div><div class="flows">`;
@@ -212,17 +216,17 @@ function render(d){
     html+=`<h2 class="sec">${esc(g.title)}</h2><div class="secnote">${esc(g.note)}</div>`;
     if(g.id==="crisis"&&c.watchlist){
       html+=`<div class="watchrow">${c.watchlist.map(w=>
-        `<span class="watch${w.fired?" on":""}">${w.fired?"⚠":"✓"} ${esc(w.name)}</span>`).join("")}</div>`;
+        `<span class="watch${w.fired?" on":(w.na?" na":"")}">${w.fired?"⚠":(w.na?"？":"✓")} ${esc(w.name)}${w.na?"（資料舊）":""}</span>`).join("")}</div>`;
     }
     for(const i of items){
       const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs);
       html+=`<div class="card" id="c-${i.id}">
         <div class="row" onclick="this.parentNode.classList.toggle('open')">
           <span class="dot ${i.signal}"></span>
-          <div class="nm"><b>${esc(i.label)}${i.opp?'<span class="oppflag">買點</span>':""}${i.stale?'<span class="stale-tag">前值</span>':""}</b>
+          <div class="nm"><b>${esc(i.label)}${i.opp?'<span class="oppflag">買點</span>':""}${i.stale?'<span class="stale-tag">前值</span>':""}${i.old?'<span class="stale-tag">資料較舊</span>':""}</b>
             <span>${esc(i.signal_text)}</span></div>
           ${viz}
-          <div class="val"><b>${fmtVal(i)}</b><span>${i.change?("週 "+esc(i.change)):""}</span></div>
+          <div class="val"><b>${fmtVal(i)}</b><span>${i.change?((i.chg_label||"週")+" "+esc(i.change)):""}</span></div>
           <span class="chev">▼</span>
         </div>
         <div class="detail">
@@ -234,7 +238,8 @@ function render(d){
   }
 
   html+=`<div class="legend">圖例：● 綠＝對進攻/風險資產有利（含「大跌＝買點」的反向邏輯，綠≠市場在漲）｜● 藍＝中性｜● 黃＝留意｜● 紅＝警戒。
-  「週」＝與約一週前相比。色帶圖＝現值（白針）落在哪個門檻區。虛線＝Jane 的判斷門檻。點卡片展開判讀邏輯與出處。</div>
+  「週/月」＝與約一週/一個月前相比（依資料頻率）。色帶圖＝現值（白針）落在哪個門檻區。虛線＝Jane 的判斷門檻。
+  「資料較舊」＝該來源更新落後，判讀時多留一分保留；危機燈板中以「？」顯示、不當作未觸發。點卡片展開判讀邏輯與出處。</div>
   <footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
   資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。</footer>`;
   document.getElementById("app").innerHTML=html;
