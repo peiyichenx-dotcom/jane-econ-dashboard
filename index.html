@@ -135,7 +135,17 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 
 .legend{font-size:10.5px;color:var(--tx3);margin:8px 2px 0;line-height:1.6}
 footer{margin-top:26px;padding:0 4px;font-size:11px;color:var(--tx3);line-height:1.7}
+footer .note{margin-top:8px}
+footer .note b{color:var(--tx2)}
 .loading{text-align:center;padding:60px 20px;color:var(--tx2)}
+
+/* 趨勢線滑鼠提示 */
+svg[data-spark]{cursor:crosshair}
+.sparktip{position:fixed;transform:translate(-50%,-100%);background:var(--tx);color:var(--bg);
+  font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:7px;
+  pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.28);display:none}
+.sparktip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+  border:4px solid transparent;border-top-color:var(--tx)}
 
 /* 桌面寬螢幕：大方格模式，判讀說明直接展開 */
 @media(min-width:900px){
@@ -175,7 +185,7 @@ function themeColors(){
 
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-function sparkline(vals,sig,refs){
+function sparkline(vals,sig,refs,dec,unit){
   if(!vals||vals.length<2) return "";
   const w=64,h=26;
   let mn=Math.min(...vals),mx=Math.max(...vals);
@@ -186,7 +196,7 @@ function sparkline(vals,sig,refs){
   const col=SIG_C[sig]||SIG_C.info;
   let reflines=(refs||[]).filter(r=>r>=mn&&r<=mx).map(r=>
     `<line x1="0" y1="${y(r).toFixed(1)}" x2="${w}" y2="${y(r).toFixed(1)}" stroke="#8b96b3" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.55"/>`).join("");
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${reflines}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+  return `<svg data-spark="${vals.join(',')}" data-dec="${dec==null?0:dec}" data-unit="${esc(unit||'')}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${reflines}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 function bandbar(band,value){
@@ -263,7 +273,7 @@ function render(d){
     }
     html+=`<div class="grpgrid">`;
     for(const i of items){
-      const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs);
+      const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs,i.decimals,i.unit);
       html+=`<div class="card" id="c-${i.id}">
         <div class="row" onclick="this.parentNode.classList.toggle('open')">
           <span class="dot ${i.signal}"></span>
@@ -284,9 +294,11 @@ function render(d){
 
   html+=`<div class="legend">圖例：● 綠＝對進攻/風險資產有利（含「大跌＝買點」的反向邏輯，綠≠市場在漲）｜● 藍＝中性｜● 黃＝留意｜● 紅＝警戒。
   「週/月」＝與約一週/一個月前相比（依資料頻率）。色帶圖＝現值（指針）落在哪個門檻區。虛線＝Jane 的判斷門檻。
-  「資料較舊」＝該來源更新落後，判讀時多留一分保留；危機燈板中以「？」顯示、不當作未觸發。手機上點卡片展開判讀邏輯與出處；🌓 可切換深/淺色。</div>
+  「資料較舊」＝該來源更新落後，判讀時多留一分保留；危機燈板中以「？」顯示、不當作未觸發。手機上點卡片展開判讀邏輯與出處；滑鼠滑過（或手機點按）趨勢線可看該點數值；🌓 可切換深/淺色。</div>
   <footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
-  資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。</footer>`;
+  資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。
+  <div class="note">📌 <b>暫未納入</b>（難以每日穩定取得）：FRA-OIS 利差、奢侈品／遊艇銷量（NMMA 季度數據）等，之後有穩定來源再補。</div>
+  <div class="note">🔍 <b>個股研究不放這裡</b>：逐檔基本面與籌碼（OCF／FCF／ROIC、負債比、護城河、13F、內部人 Form 4、解禁）屬個股功課，不適合總體儀表板；需要時用 daloopa／bigdata 逐檔即時分析。</div></footer>`;
   document.getElementById("app").innerHTML=html;
 }
 
@@ -360,6 +372,41 @@ function boot(){
   });
 }
 boot();
+
+// ---- 趨勢線滑鼠提示：滑過即顯示該點數值（自製，不依賴外部圖表庫） ----
+(function(){
+  let tip=null;
+  function fmtNum(v,d){return Number(v).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});}
+  function label(svg,frac){
+    const vals=(svg.dataset.spark||"").split(",").map(Number).filter(v=>!isNaN(v));
+    if(vals.length<2) return "";
+    const idx=Math.round(Math.max(0,Math.min(1,frac))*(vals.length-1));
+    const d=parseInt(svg.dataset.dec||"0",10)||0;
+    const u=svg.dataset.unit||"";
+    let s=fmtNum(vals[idx],d);
+    s = u==="$" ? "$"+s : (u ? s+" "+u : s);
+    if(idx===vals.length-1) s+="（最新）";
+    else if(idx===0) s+="（最早）";
+    return s;
+  }
+  function show(svg,clientX){
+    const r=svg.getBoundingClientRect();
+    if(!r.width){hide();return;}
+    const txt=label(svg,(clientX-r.left)/r.width);
+    if(!txt){hide();return;}
+    if(!tip){tip=document.createElement("div");tip.className="sparktip";document.body.appendChild(tip);}
+    tip.textContent=txt;
+    tip.style.display="block";
+    tip.style.left=Math.max(34,Math.min(window.innerWidth-34,clientX))+"px";
+    tip.style.top=(r.top-6)+"px";
+  }
+  function hide(){if(tip)tip.style.display="none";}
+  const hit=e=>{const t=e.target;return t&&t.closest?t.closest("svg[data-spark]"):null;};
+  document.addEventListener("pointermove",e=>{const s=hit(e);s?show(s,e.clientX):hide();},{passive:true});
+  document.addEventListener("pointerdown",e=>{const s=hit(e);if(s)show(s,e.clientX);},{passive:true});
+  document.addEventListener("pointerup",e=>{if(e.pointerType!=="mouse")setTimeout(hide,1400);},{passive:true});
+  window.addEventListener("scroll",hide,{passive:true});
+})();
 </script>
 </body>
 </html>
