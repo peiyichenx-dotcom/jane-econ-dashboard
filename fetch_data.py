@@ -242,6 +242,10 @@ def spark(s, n=120):
     return [round(v, 4) for _, v in s[-n:]]
 
 
+def spark_d(s, n=120):
+    return [d[2:] for d, _ in s[-n:]]
+
+
 def sma(s, n):
     if len(s) < n:
         return None
@@ -411,6 +415,7 @@ def main():
             "signal": signal, "signal_text": signal_text, "interp": interp,
             "ref": ref, "source": source, "extra": extra,
             "spark": spark(series) if series else ([v for _, v in (acc or [])]),
+            "spark_d": spark_d(series) if series else ([h[0][2:] for h in (acc or [])]),
             "opp": opp, "stale": False, "old": old, "acc": acc,
             "band": band, "refs": refs,
         })
@@ -489,6 +494,8 @@ def main():
             sig, st = "bad", "倒掛中：12–18個月內衰退機率高"
         elif was_inverted_recent:
             sig, st = "warn", "已解除倒掛——Jane：真正危機常在恢復之後"
+        elif yc * 100 < 25:
+            sig, st = "warn", f"接近倒掛（{yc*100:.0f}bps）：利差壓縮中，密切留意"
         else:
             sig, st = "good", "曲線正常，無倒掛警訊"
     add("curve", "rates", "殖利率曲線 10Y−2Y", yc * 100 if yc is not None else None, "bps", 0,
@@ -835,6 +842,36 @@ def main():
          "note": ("買點旗標出現：這就是保留30%現金在等的時刻" if opps else "Jane 鐵律：平時至少10–30%現金，過熱時提高到40–50%")},
     ]
 
+    # 變化欄利弊方向：+1 上升對進攻環境有利、-1 上升不利、其餘中性
+    _UP = {"fed_bs": 1, "m2": 1, "curve": 1, "retail": 1, "csent": 1, "ma200": 1, "spx_dd": 1,
+           "btc": 1, "usdc_share": 1, "copper_gold": 1,
+           "claims": -1, "unrate": -1, "cpi": -1, "vix": -1, "hy_spread": -1,
+           "us2y": -1, "us10y": -1, "real_rate": -1, "cape": -1}
+    for i in IND:
+        _ch = i.get("change") or ""
+        _sgn = 1 if _ch.startswith("▲") else (-1 if _ch.startswith("▼") else 0)
+        _u = _UP.get(i["id"], 0)
+        i["chg_dir"] = "good" if _sgn * _u > 0 else ("bad" if _sgn * _u < 0 else "flat")
+
+    # 危機燈「距門檻多遠」——從「有沒有事」升級為「離出事多遠」
+    neg_streak = 0
+    for _k in range(1, len(rs)):
+        if rs[-_k][1] < rs[-_k - 1][1]:
+            neg_streak += 1
+        else:
+            break
+    cg_chg = ((cgv / cgp - 1) * 100) if (cgv is not None and cgp) else None
+    _WLD = {
+        "殖利率曲線倒掛": f"{yc*100:.0f}bps→0" if yc is not None else "",
+        "信用利差急擴": f"{hy_bps:.0f}→400" if hy_bps is not None else "",
+        "VIX>30 恐慌": f"{vix:.0f}→30" if vix is not None else "",
+        "初領失業金>30萬": f"{ic_k:.0f}k→300k" if ic_k is not None else "",
+        "銅金比急跌": f"60日{cg_chg:+.0f}%→-10%" if cg_chg is not None else "",
+        "失業率快速上升": f"+{un_rise:.1f}pp→+0.8" if un_rise is not None else "",
+        "零售連3月負成長": f"{neg_streak}連跌→3",
+        "S&P自高點跌逾20%": f"{dd:.1f}%→-20%" if dd is not None else "",
+    }
+
     # 危機燈 ↔ 指標對照：資料過舊或沿用前值時，該燈標示「無法判定」而非亮綠
     _WL = {"殖利率曲線倒掛": "curve", "信用利差急擴": "hy_spread", "VIX>30 恐慌": "vix",
            "初領失業金>30萬": "claims", "銅金比急跌": "copper_gold", "失業率快速上升": "unrate",
@@ -850,6 +887,7 @@ def main():
                       "crisis_flags": crisis_flags, "crisis_total": 8, "cycle": cycle,
                       "watchlist": [{"name": w,
                                      "fired": w in crisis_flags,
+                                     "dist": _WLD.get(w, ""),
                                      "na": bool(_bid.get(_WL.get(w), {}).get("old") or _bid.get(_WL.get(w), {}).get("stale"))}
                                     for w in ["殖利率曲線倒掛", "信用利差急擴", "VIX>30 恐慌", "初領失業金>30萬",
                                               "銅金比急跌", "失業率快速上升", "零售連3月負成長", "S&P自高點跌逾20%"]],
