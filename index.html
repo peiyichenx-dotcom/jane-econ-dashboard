@@ -86,6 +86,7 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .watch{font-size:10.5px;padding:2px 8px;border-radius:12px;border:1px solid var(--line);color:var(--tx3);background:var(--card)}
 .watch.on{color:var(--bad);border-color:var(--chip-cr-bd);background:var(--chip-cr-bg);font-weight:700}
 .watch.na{color:var(--tx3);border-style:dashed;opacity:.75}
+.watch .wd{font-style:normal;opacity:.7;margin-left:2px;font-size:9.5px}
 
 /* 資金流向 */
 .flows{display:flex;flex-direction:column;gap:8px}
@@ -108,7 +109,10 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .row .val{text-align:right;flex-shrink:0}
 .row .val b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
 .row .val span{font-size:10px;color:var(--tx3);display:block}
+.row .val span.good{color:var(--good)}
+.row .val span.bad{color:var(--bad)}
 .row svg{flex-shrink:0;opacity:.92;width:64px;height:26px}
+.row .axis{display:none}
 .chev{color:var(--tx3);font-size:10px;flex-shrink:0;transition:transform .18s;margin-left:-2px}
 .card.open .chev{transform:rotate(180deg)}
 .oppflag{font-size:10px;color:var(--oppfg);background:var(--good);border-radius:4px;padding:1px 5px;
@@ -133,6 +137,7 @@ h2.sec::before{content:"";width:4px;height:15px;border-radius:2px;background:var
 .st.常備{color:var(--tx2);background:var(--card2)}
 .tile p{font-size:11px;color:var(--tx3);line-height:1.45}
 
+.topline{font-size:11.5px;color:var(--tx3);margin:-4px 2px 12px}
 .legend{font-size:10.5px;color:var(--tx3);margin:8px 2px 0;line-height:1.6}
 footer{margin-top:26px;padding:0 4px;font-size:11px;color:var(--tx3);line-height:1.7}
 footer .note{margin-top:8px}
@@ -161,6 +166,7 @@ svg[data-spark]{cursor:crosshair}
   .row .nm{order:1}
   .row .val{order:2}
   .row svg{order:3;width:100%;height:44px;margin-top:8px}
+  .row .axis{display:flex;order:4;width:100%;justify-content:space-between;font-size:10px;color:var(--tx3)}
   .chev{display:none}
   .detail{display:block}
   .row .nm span{-webkit-line-clamp:3}
@@ -185,7 +191,7 @@ function themeColors(){
 
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-function sparkline(vals,sig,refs,dec,unit){
+function sparkline(vals,sig,refs,dec,unit,dates){
   if(!vals||vals.length<2) return "";
   const w=64,h=26;
   let mn=Math.min(...vals),mx=Math.max(...vals);
@@ -196,7 +202,7 @@ function sparkline(vals,sig,refs,dec,unit){
   const col=SIG_C[sig]||SIG_C.info;
   let reflines=(refs||[]).filter(r=>r>=mn&&r<=mx).map(r=>
     `<line x1="0" y1="${y(r).toFixed(1)}" x2="${w}" y2="${y(r).toFixed(1)}" stroke="#8b96b3" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.55"/>`).join("");
-  return `<svg data-spark="${vals.join(',')}" data-dec="${dec==null?0:dec}" data-unit="${esc(unit||'')}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${reflines}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+  return `<svg data-spark="${vals.join(',')}" data-dates="${(dates||[]).join(',')}" data-dec="${dec==null?0:dec}" data-unit="${esc(unit||'')}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${reflines}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 function bandbar(band,value){
@@ -235,6 +241,7 @@ function render(d){
     <div class="upd">更新 ${esc(d.updated_tpe)} 台北</div>
     <button id="thbtn" onclick="toggleTheme()" title="切換深/淺色">🌓</button>
     <button id="refbtn" onclick="manualUpdate()">🔄 立即更新</button></div></header>`;
+  html+=`<div class="topline">由上而下：先看總評與危機燈板決定現金水位 → 再看流動性與情緒抓買賣時機。燈號為機械式判讀，非投資建議。</div>`;
   const age=staleHours(d);
   if(age>26) html+=`<div class="stale-banner">⚠️ 資料已 ${Math.floor(age)} 小時未更新（最後：${esc(d.updated_tpe)}）——以下數字可能過期，判斷前請留意。</div>`;
   if(d.mock) html+=`<div class="stale-banner">⚠️ 目前顯示測試資料（mock）</div>`;
@@ -269,18 +276,18 @@ function render(d){
     html+=`<h2 class="sec">${esc(g.title)}</h2><div class="secnote">${esc(g.note)}</div>`;
     if(g.id==="crisis"&&c.watchlist){
       html+=`<div class="watchrow">${c.watchlist.map(w=>
-        `<span class="watch${w.fired?" on":(w.na?" na":"")}">${w.fired?"⚠":(w.na?"？":"✓")} ${esc(w.name)}${w.na?"（資料舊）":""}</span>`).join("")}</div>`;
+        `<span class="watch${w.fired?" on":(w.na?" na":"")}">${w.fired?"⚠":(w.na?"？":"✓")} ${esc(w.name)}${w.na?"（資料舊）":""}${w.dist?` <i class="wd">${esc(w.dist)}</i>`:""}</span>`).join("")}</div>`;
     }
     html+=`<div class="grpgrid">`;
     for(const i of items){
-      const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs,i.decimals,i.unit);
+      const viz = i.band ? bandbar(i.band,i.value) : sparkline(i.spark,i.signal,i.refs,i.decimals,i.unit,i.spark_d);
       html+=`<div class="card" id="c-${i.id}">
         <div class="row" onclick="this.parentNode.classList.toggle('open')">
           <span class="dot ${i.signal}"></span>
           <div class="nm"><b>${esc(i.label)}${i.opp?'<span class="oppflag">買點</span>':""}${i.stale?'<span class="stale-tag">前值</span>':""}${i.old?'<span class="stale-tag">資料較舊</span>':""}</b>
             <span>${esc(i.signal_text)}</span></div>
-          ${viz}
-          <div class="val"><b>${fmtVal(i)}</b><span>${i.change?((i.chg_label||"週")+" "+esc(i.change)):""}</span></div>
+          ${viz}${(!i.band&&i.spark_d&&i.spark_d.length>1)?`<div class="axis"><span>${esc(i.spark_d[0])}</span><span>${esc(i.spark_d[i.spark_d.length-1])}</span></div>`:""}
+          <div class="val"><b>${fmtVal(i)}</b><span class="${i.chg_dir||""}">${i.change?((i.chg_label||"週")+" "+esc(i.change)):""}</span></div>
           <span class="chev">▼</span>
         </div>
         <div class="detail">
@@ -293,7 +300,7 @@ function render(d){
   }
 
   html+=`<div class="legend">圖例：● 綠＝對進攻/風險資產有利（含「大跌＝買點」的反向邏輯，綠≠市場在漲）｜● 藍＝中性｜● 黃＝留意｜● 紅＝警戒。
-  「週/月」＝與約一週/一個月前相比（依資料頻率）。色帶圖＝現值（指針）落在哪個門檻區。虛線＝Jane 的判斷門檻。
+  「週/月」＝與約一週/一個月前相比（依資料頻率），變化欄綠/紅＝該變化對進攻環境有利/不利。色帶圖＝現值（指針）落在哪個門檻區。虛線＝Jane 的判斷門檻。
   「資料較舊」＝該來源更新落後，判讀時多留一分保留；危機燈板中以「？」顯示、不當作未觸發。手機上點卡片展開判讀邏輯與出處；滑鼠滑過（或手機點按）趨勢線可看該點數值；🌓 可切換深/淺色。</div>
   <footer>本儀表板整理自 Jane（旺來幫）文章中的觀察框架與判讀邏輯，僅供個人學習參考，非投資建議。
   資料來源：FRED、Yahoo Finance、ECB、CNN、CoinGecko、multpl、er-api。每日自動更新（台北時間早上）。
@@ -385,6 +392,8 @@ boot();
     const u=svg.dataset.unit||"";
     let s=fmtNum(vals[idx],d);
     s = u==="$" ? "$"+s : (u ? s+" "+u : s);
+    const ds=(svg.dataset.dates||"").split(",");
+    if(ds[idx]) s=ds[idx]+"｜"+s;
     if(idx===vals.length-1) s+="（最新）";
     else if(idx===0) s+="（最早）";
     return s;
